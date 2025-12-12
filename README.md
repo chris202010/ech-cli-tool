@@ -29,8 +29,11 @@
 在您的 Linux 终端中执行以下命令即可安装：
 
 ```bash
-# 下载脚本
+# 方法一：在线下载脚本
 wget -O ech-cli.sh https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh
+
+# 方法二：手动上传
+# 您也可以先下载 ech-cli.sh 到本地，然后上传到服务器 (如 /root 目录)
 
 # 授信运行
 chmod +x ech-cli.sh
