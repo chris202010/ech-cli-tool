@@ -1,4 +1,6 @@
-# ECH Workers Client CLI Unofficial
+# ECH Workers Client CLI Tool
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > ⚠️ **说明 / Note**  
 > 本项目是基于 [byJoey/ech-wk](https://github.com/byJoey/ech-wk) 开发的第三方管理脚本。  
