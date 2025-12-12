@@ -300,20 +300,33 @@ SCRIPT_VER="v1.1.1"
 
 # 检查脚本更新
 check_script_update() {
-    echo -e "${YELLOW}正在检查脚本更新...${PLAIN}"
-    REMOTE_VERSION=$(curl -s "https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh" | grep 'SCRIPT_VER="' | head -n 1 | cut -d '"' -f 2)
+    # 避免重复检查
+    if [ ! -z "$UPDATE_TIP" ]; then return; fi
     
-    if [[ -z "$REMOTE_VERSION" ]]; then
-        UPDATE_TIP="${RED}检查失败${PLAIN}"
-        return
-    fi
-
-    if [[ "$REMOTE_VERSION" != "$SCRIPT_VER" ]]; then
-        UPDATE_TIP="${GREEN}发现新版本: ${REMOTE_VERSION}${PLAIN}"
-        CAN_UPDATE=1
+    # 后台异步检查 (通过临时文件通讯)
+    UPDATE_TMP="/tmp/ech_update_check"
+    
+    if [ ! -f "$UPDATE_TMP" ]; then
+        # 如果没有临时文件，启动后台进程去查
+        (
+            REMOTE_VERSION=$(curl -s -m 3 --connect-timeout 3 "https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh" | grep 'SCRIPT_VER="' | head -n 1 | cut -d '"' -f 2)
+            echo "$REMOTE_VERSION" > "$UPDATE_TMP"
+        ) &
+        UPDATE_TIP="${YELLOW}检查中...${PLAIN}"
     else
-        UPDATE_TIP="${GREEN}已是最新${PLAIN}"
-        CAN_UPDATE=0
+        # 读取后台结果
+        REMOTE_VERSION=$(cat "$UPDATE_TMP")
+        if [[ -z "$REMOTE_VERSION" ]]; then
+            # 可能是上次失败了，清理重试
+             rm -f "$UPDATE_TMP"
+             UPDATE_TIP="${YELLOW}检查中...${PLAIN}"
+        elif [[ "$REMOTE_VERSION" != "$SCRIPT_VER" ]]; then
+            UPDATE_TIP="${GREEN}新版本: ${REMOTE_VERSION}${PLAIN}"
+            CAN_UPDATE=1
+        else
+            UPDATE_TIP="${GREEN}最新${PLAIN}"
+            CAN_UPDATE=0
+        fi
     fi
 }
 
@@ -329,10 +342,7 @@ show_menu() {
     clear
     check_status
     load_config
-    # 异步检查更新 (或是快速检查)
-     if [ -z "$UPDATE_TIP" ]; then
-        check_script_update
-    fi
+    check_script_update
 
     echo -e "${BLUE}
     ███████╗ ██████╗██╗  ██╗
