@@ -251,6 +251,32 @@ check_status() {
 
 # 获取日志
 view_logs() {
+    # 尝试提取端口
+    CONF_PORT=${LISTEN_ADDR##*:}
+    
+    echo -e "------------------------------------------------------"
+    echo -e "${YELLOW}>>> 当前活跃连接统计${PLAIN}"
+    
+    CLIENTS=""
+    if command -v ss >/dev/null 2>&1; then
+        # ss output format can vary, allow for simple matching
+        CLIENTS=$(ss -an state established | grep ":$CONF_PORT" | awk '{print $5}' | awk -F: '{print $1}' | sort | uniq | grep -v "127.0.0.1")
+    elif command -v netstat >/dev/null 2>&1; then
+        CLIENTS=$(netstat -an | grep ":$CONF_PORT" | grep ESTABLISHED | awk '{print $5}' | awk -F: '{print $1}' | sort | uniq | grep -v "127.0.0.1")
+    fi
+    
+    # 统计数量
+    COUNT=$(echo "$CLIENTS" | sed '/^$/d' | wc -l)
+    
+    if [ "$COUNT" -eq "0" ] || [ -z "$CLIENTS" ]; then
+         echo -e "当前无活跃客户端连接"
+    else
+         echo -e "在线客户端数: ${GREEN}$COUNT${PLAIN}"
+         echo -e "客户端列表:"
+         echo -e "${CYAN}$CLIENTS${PLAIN}"
+    fi
+    echo -e "------------------------------------------------------"
+
     echo -e "${YELLOW}正在获取最后 50 行日志 (按 Ctrl+C 退出)...${PLAIN}"
     journalctl -u ech-workers -n 50 -f
 }
