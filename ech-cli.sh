@@ -224,7 +224,7 @@ health_check() {
     fi
     
     if [ "$PORT_OK" -eq 1 ]; then
-        echo -e "  端口监听: ${GREEN}正常 (:$CONF_PORT)${PLAIN}"
+        echo -e "  端口监听: ${GREEN}正常 ($CONF_PORT)${PLAIN}"
     elif [ "$PORT_OK" -eq 0 ]; then
         echo -e "  端口监听: ${RED}异常 - 端口 $CONF_PORT 未监听${PLAIN}"
         return
@@ -244,30 +244,56 @@ health_check() {
     # 测试代理连接 - 使用轻量级请求
     echo -e "  测试代理连接..."
     
-    # 测试 1: 使用 curl 通过代理获取 IP
+    # 测试 1: 使用 curl 通过代理获取 IP 和归属地
     TEST_OK=0
+    PROXY_IP=""
+    IP_INFO=""
     
-    # 尝试通过代理访问 httpbin (轻量级，返回快)
-    PROXY_IP=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 8 "https://httpbin.org/ip" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-    if [ ! -z "$PROXY_IP" ]; then
-        echo -e "  代理出口: ${GREEN}$PROXY_IP${PLAIN}"
-        TEST_OK=1
-    else
-        # 备用测试: ip.sb
-        PROXY_IP=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 8 "https://api.ip.sb/ip" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    # 尝试通过 ip.sb 获取 IP 和详细信息
+    IP_RESULT=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 8 "https://api.ip.sb/geoip" 2>/dev/null)
+    if [ ! -z "$IP_RESULT" ]; then
+        PROXY_IP=$(echo "$IP_RESULT" | grep -oE '"ip":"[^"]+"' | cut -d'"' -f4)
+        IP_COUNTRY=$(echo "$IP_RESULT" | grep -oE '"country":"[^"]+"' | cut -d'"' -f4)
+        IP_CITY=$(echo "$IP_RESULT" | grep -oE '"city":"[^"]+"' | cut -d'"' -f4)
+        IP_ISP=$(echo "$IP_RESULT" | grep -oE '"isp":"[^"]+"' | cut -d'"' -f4)
+        IP_ORG=$(echo "$IP_RESULT" | grep -oE '"organization":"[^"]+"' | cut -d'"' -f4)
+        
         if [ ! -z "$PROXY_IP" ]; then
-            echo -e "  代理出口: ${GREEN}$PROXY_IP${PLAIN}"
+            TEST_OK=1
+            # 构建归属地信息
+            if [ ! -z "$IP_COUNTRY" ]; then
+                IP_INFO="$IP_COUNTRY"
+                [ ! -z "$IP_CITY" ] && IP_INFO="$IP_INFO $IP_CITY"
+            fi
+            [ ! -z "$IP_ISP" ] && IP_INFO="$IP_INFO | $IP_ISP"
+            [ -z "$IP_ISP" ] && [ ! -z "$IP_ORG" ] && IP_INFO="$IP_INFO | $IP_ORG"
+        fi
+    fi
+    
+    # 备用方案：httpbin
+    if [ "$TEST_OK" -eq 0 ]; then
+        PROXY_IP=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 8 "https://httpbin.org/ip" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ ! -z "$PROXY_IP" ]; then
             TEST_OK=1
         fi
     fi
     
     if [ "$TEST_OK" -eq 1 ]; then
+        echo -e "  代理出口: ${GREEN}$PROXY_IP${PLAIN}"
+        if [ ! -z "$IP_INFO" ]; then
+            echo -e "  IP 归属: ${CYAN}$IP_INFO${PLAIN}"
+        fi
         echo -e "  代理测试: ${GREEN}正常${PLAIN}"
         
-        # 额外测试 Cloudflare
-        CF_TEST=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 5 "https://cloudflare.com/cdn-cgi/trace" 2>/dev/null | grep -c "warp=" || echo 0)
-        if [ "$CF_TEST" -gt 0 ]; then
-            echo -e "  CF 连接: ${GREEN}正常${PLAIN}"
+        # 额外测试 Cloudflare CDN 站点（通过 ProxyIP 访问）
+        CF_RESULT=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 5 "https://cloudflare.com/cdn-cgi/trace" 2>/dev/null)
+        if echo "$CF_RESULT" | grep -q "warp="; then
+            CF_COLO=$(echo "$CF_RESULT" | grep "colo=" | cut -d'=' -f2)
+            if [ ! -z "$CF_COLO" ]; then
+                echo -e "  CF 连接: ${GREEN}正常${PLAIN} (节点: $CF_COLO)"
+            else
+                echo -e "  CF 连接: ${GREEN}正常${PLAIN}"
+            fi
         else
             echo -e "  CF 连接: ${YELLOW}未知${PLAIN}"
         fi
