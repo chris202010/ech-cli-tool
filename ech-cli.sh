@@ -286,16 +286,25 @@ health_check() {
         echo -e "  代理测试: ${GREEN}正常${PLAIN}"
         
         # 额外测试 Cloudflare CDN 站点（通过 ProxyIP 访问）
+        echo -e "  ${YELLOW}--- CF 反代测试 ---${PLAIN}"
         CF_RESULT=$(curl -x socks5h://127.0.0.1:$CONF_PORT -s -m 5 "https://cloudflare.com/cdn-cgi/trace" 2>/dev/null)
         if echo "$CF_RESULT" | grep -q "warp="; then
+            CF_IP=$(echo "$CF_RESULT" | grep "ip=" | cut -d'=' -f2)
             CF_COLO=$(echo "$CF_RESULT" | grep "colo=" | cut -d'=' -f2)
-            if [ ! -z "$CF_COLO" ]; then
-                echo -e "  CF 连接: ${GREEN}正常${PLAIN} (节点: $CF_COLO)"
-            else
-                echo -e "  CF 连接: ${GREEN}正常${PLAIN}"
+            CF_LOC=$(echo "$CF_RESULT" | grep "loc=" | cut -d'=' -f2)
+            
+            echo -e "  反代状态: ${GREEN}正常${PLAIN}"
+            if [ ! -z "$CF_IP" ]; then
+                echo -e "  反代出口: ${GREEN}$CF_IP${PLAIN}"
+            fi
+            if [ ! -z "$CF_LOC" ] && [ ! -z "$CF_COLO" ]; then
+                echo -e "  CF 节点: ${CYAN}$CF_LOC ($CF_COLO)${PLAIN}"
+            elif [ ! -z "$CF_COLO" ]; then
+                echo -e "  CF 节点: ${CYAN}$CF_COLO${PLAIN}"
             fi
         else
-            echo -e "  CF 连接: ${YELLOW}未知${PLAIN}"
+            echo -e "  反代状态: ${RED}失败${PLAIN}"
+            echo -e "  ${YELLOW}提示: 检查 ProxyIP 配置是否正确${PLAIN}"
         fi
     else
         echo -e "  代理测试: ${RED}失败${PLAIN}"
