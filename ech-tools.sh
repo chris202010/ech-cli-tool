@@ -337,7 +337,8 @@ create_service_openwrt() {
 START=99
 USE_PROCD=1
 
-CONF_FILE="/etc/ech-workers.conf"
+CONF_FILE="$CONF_FILE"
+BIN_PATH="$BIN_PATH"
 
 start_service() {
     if [ -f "\$CONF_FILE" ]; then
@@ -348,7 +349,7 @@ start_service() {
     fi
 
     procd_open_instance
-    procd_set_param command $BIN_PATH
+    procd_set_param command \$BIN_PATH
     procd_append_param command -f "\$SERVER_ADDR"
     procd_append_param command -l "\$LISTEN_ADDR"
     procd_append_param command -token "\$TOKEN"
@@ -377,8 +378,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/usr/local/bin
-ExecStart=/usr/local/bin/ech-workers -f ${SERVER_ADDR} -l ${LISTEN_ADDR} -token ${TOKEN} -ip ${BEST_IP} -dns ${DNS} -ech ${ECH_DOMAIN} -routing ${ROUTING}
+WorkingDirectory=${ECH_DIR}
+ExecStart=${BIN_PATH} -f ${SERVER_ADDR} -l ${LISTEN_ADDR} -token ${TOKEN} -ip ${BEST_IP} -dns ${DNS} -ech ${ECH_DOMAIN} -routing ${ROUTING}
 Restart=on-failure
 RestartSec=5s
 
@@ -769,7 +770,8 @@ check_script_update() {
 
 # 更新脚本
 update_script() {
-    wget --no-check-certificate -O /root/ech-tools.sh "https://raw.githubusercontent.com/lzban8/ech-tools/main/ech-tools.sh" && chmod +x /root/ech-tools.sh
+    CURRENT_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    wget --no-check-certificate -O "$CURRENT_SCRIPT" "https://raw.githubusercontent.com/lzban8/ech-tools/main/ech-tools.sh" && chmod +x "$CURRENT_SCRIPT"
     echo -e "${GREEN}脚本更新成功！请重新运行脚本。${PLAIN}"
     exit 0
 }
@@ -820,12 +822,12 @@ show_menu() {
     if [ ! -f "$BIN_PATH" ]; then
         # 未安装客户端，显示精简菜单
         echo -e "${BLUE}
-    ███████╗ ██████╗██╗  ██╗
-    ██╔════╝██╔════╝██║  ██║
-    █████╗  ██║     ███████║
-    ██╔══╝  ██║     ██╔══██║
-    ███████╗╚██████╗██║  ██║
-    ╚══════╝ ╚═════╝╚═╝  ╚═╝
+    ███████╗ ██████╗██╗  ██╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗
+    ██╔════╝██╔════╝██║  ██║    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
+    █████╗  ██║     ███████║       ██║   ██║   ██║██║   ██║██║     ███████╗
+    ██╔══╝  ██║     ██╔══██║       ██║   ██║   ██║██║   ██║██║     ╚════██║
+    ███████╗╚██████╗██║  ██║       ██║   ╚██████╔╝╚██████╔╝███████╗███████║
+    ╚══════╝ ╚═════╝╚═╝  ╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
     ${PLAIN}"
         echo -e "${YELLOW}检测到客户端未安装，请先安装客户端！${PLAIN}"
         echo -e "当前版本: ${GREEN}${SCRIPT_VER}${PLAIN}  状态: ${UPDATE_TIP}"
@@ -849,12 +851,12 @@ show_menu() {
     check_status
 
     echo -e "${BLUE}
-    ███████╗ ██████╗██╗  ██╗
-    ██╔════╝██╔════╝██║  ██║
-    █████╗  ██║     ███████║
-    ██╔══╝  ██║     ██╔══██║
-    ███████╗╚██████╗██║  ██║
-    ╚══════╝ ╚═════╝╚═╝  ╚═╝
+    ███████╗ ██████╗██╗  ██╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗
+    ██╔════╝██╔════╝██║  ██║    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
+    █████╗  ██║     ███████║       ██║   ██║   ██║██║   ██║██║     ███████╗
+    ██╔══╝  ██║     ██╔══██║       ██║   ██║   ██║██║   ██║██║     ╚════██║
+    ███████╗╚██████╗██║  ██║       ██║   ╚██████╔╝╚██████╔╝███████╗███████║
+    ╚══════╝ ╚═════╝╚═╝  ╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
     ${PLAIN}"
     echo -e "快捷键已设置为 ${YELLOW}ech${PLAIN} , 下次运行输入 ${YELLOW}ech${PLAIN} 即可"
     echo -e "当前版本: ${GREEN}${SCRIPT_VER}${PLAIN}  状态: ${UPDATE_TIP}"
