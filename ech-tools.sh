@@ -16,10 +16,18 @@ PLAIN='\033[0m'
 # 变量定义
 REPO_OWNER="byJoey"
 REPO_NAME="ech-wk"
-BIN_PATH="/usr/local/bin/ech-workers"
+
+# 获取脚本运行目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ECH_DIR="${SCRIPT_DIR}/ech-tools"
+
+# 安装路径（使用脚本运行目录下的 ech-tools 文件夹）
+BIN_PATH="${ECH_DIR}/ech-workers"
+CONF_FILE="${ECH_DIR}/ech-workers.conf"
+
+# 服务文件路径（保持在系统目录）
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/ech-workers.service"
 SERVICE_FILE_OPENWRT="/etc/init.d/ech-workers"
-CONF_FILE="/etc/ech-workers.conf"
 
 # 全局变量：是否为 OpenWrt
 IS_OPENWRT=0
@@ -79,8 +87,8 @@ install_dependencies() {
         echo -e "${RED}无法识别的系统，请手动安装 curl, wget, tar, jq${PLAIN}"
     fi
     
-    # 确保 /usr/local/bin 存在
-    mkdir -p /usr/local/bin
+    # 确保 ech-tools 目录存在
+    mkdir -p "$ECH_DIR"
 }
 
 # 获取配置
@@ -329,7 +337,8 @@ create_service_openwrt() {
 START=99
 USE_PROCD=1
 
-CONF_FILE="/etc/ech-workers.conf"
+CONF_FILE="$CONF_FILE"
+BIN_PATH="$BIN_PATH"
 
 start_service() {
     if [ -f "\$CONF_FILE" ]; then
@@ -340,7 +349,7 @@ start_service() {
     fi
 
     procd_open_instance
-    procd_set_param command $BIN_PATH
+    procd_set_param command \$BIN_PATH
     procd_append_param command -f "\$SERVER_ADDR"
     procd_append_param command -l "\$LISTEN_ADDR"
     procd_append_param command -token "\$TOKEN"
@@ -369,8 +378,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/usr/local/bin
-ExecStart=/usr/local/bin/ech-workers -f ${SERVER_ADDR} -l ${LISTEN_ADDR} -token ${TOKEN} -ip ${BEST_IP} -dns ${DNS} -ech ${ECH_DOMAIN} -routing ${ROUTING}
+WorkingDirectory=${ECH_DIR}
+ExecStart=${BIN_PATH} -f ${SERVER_ADDR} -l ${LISTEN_ADDR} -token ${TOKEN} -ip ${BEST_IP} -dns ${DNS} -ech ${ECH_DOMAIN} -routing ${ROUTING}
 Restart=on-failure
 RestartSec=5s
 
@@ -528,9 +537,11 @@ install_ech() {
 
 # 创建快捷指令
 create_shortcut() {
+    # 获取脚本的绝对路径
+    SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
     cat > /usr/bin/ech <<EOF
 #!/bin/bash
-bash /root/ech-cli.sh
+bash "${SCRIPT_PATH}"
 EOF
     chmod +x /usr/bin/ech
     echo -e "${GREEN}快捷指令 'ech' 已创建，以后输入 ech 即可启动此脚本！${PLAIN}"
@@ -730,9 +741,9 @@ check_script_update() {
     
     if [ "$CACHE_EXPIRED" -eq 1 ]; then
         # 同步获取版本（最多等待 3 秒）
-        CHECK_URL="https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh"
+        CHECK_URL="https://raw.githubusercontent.com/lzban8/ech-tools/main/ech-tools.sh"
         if ! curl -s -m 2 --head https://raw.githubusercontent.com >/dev/null 2>&1; then
-            CHECK_URL="https://gh-proxy.org/https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh"
+            CHECK_URL="https://gh-proxy.org/https://raw.githubusercontent.com/lzban8/ech-tools/main/ech-tools.sh"
         fi
         
         REMOTE_VERSION=$(curl -s -m 3 "$CHECK_URL" 2>/dev/null | grep 'SCRIPT_VER="' | head -n 1 | cut -d '"' -f 2)
@@ -759,7 +770,8 @@ check_script_update() {
 
 # 更新脚本
 update_script() {
-    wget --no-check-certificate -O /root/ech-cli.sh "https://raw.githubusercontent.com/lzban8/ech-cli-tool/main/ech-cli.sh" && chmod +x /root/ech-cli.sh
+    CURRENT_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    wget --no-check-certificate -O "$CURRENT_SCRIPT" "https://raw.githubusercontent.com/lzban8/ech-tools/main/ech-tools.sh" && chmod +x "$CURRENT_SCRIPT"
     echo -e "${GREEN}脚本更新成功！请重新运行脚本。${PLAIN}"
     exit 0
 }
@@ -803,17 +815,48 @@ uninstall_all() {
 show_menu() {
     clear
     check_os # 重新检测
-    check_status
     load_config
     check_script_update
+    
+    # 检查客户端是否已安装
+    if [ ! -f "$BIN_PATH" ]; then
+        # 未安装客户端，显示精简菜单
+        echo -e "${BLUE}
+    ███████╗ ██████╗██╗  ██╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗
+    ██╔════╝██╔════╝██║  ██║    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
+    █████╗  ██║     ███████║       ██║   ██║   ██║██║   ██║██║     ███████╗
+    ██╔══╝  ██║     ██╔══██║       ██║   ██║   ██║██║   ██║██║     ╚════██║
+    ███████╗╚██████╗██║  ██║       ██║   ╚██████╔╝╚██████╔╝███████╗███████║
+    ╚══════╝ ╚═════╝╚═╝  ╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
+    ${PLAIN}"
+        echo -e "${YELLOW}检测到客户端未安装，请先安装客户端！${PLAIN}"
+        echo -e "当前版本: ${GREEN}${SCRIPT_VER}${PLAIN}  状态: ${UPDATE_TIP}"
+        echo -e "------------------------------------------------------"
+        echo -e " ${GREEN}1.${PLAIN} 安装/更新客户端"
+        echo -e " ${GREEN}0.${PLAIN} 退出脚本"
+        echo -e "------------------------------------------------------"
+        read -p "请输入选择 [0-1]: " choice
+        
+        case $choice in
+            1) install_ech ;;
+            0) exit 0 ;;
+            *) echo -e "${RED}无效选择${PLAIN}" ;;
+        esac
+        
+        read -p "按回车键继续..."
+        return
+    fi
+    
+    # 客户端已安装，显示完整菜单
+    check_status
 
     echo -e "${BLUE}
-    ███████╗ ██████╗██╗  ██╗
-    ██╔════╝██╔════╝██║  ██║
-    █████╗  ██║     ███████║
-    ██╔══╝  ██║     ██╔══██║
-    ███████╗╚██████╗██║  ██║
-    ╚══════╝ ╚═════╝╚═╝  ╚═╝
+    ███████╗ ██████╗██╗  ██╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗
+    ██╔════╝██╔════╝██║  ██║    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
+    █████╗  ██║     ███████║       ██║   ██║   ██║██║   ██║██║     ███████╗
+    ██╔══╝  ██║     ██╔══██║       ██║   ██║   ██║██║   ██║██║     ╚════██║
+    ███████╗╚██████╗██║  ██║       ██║   ╚██████╔╝╚██████╔╝███████╗███████║
+    ╚══════╝ ╚═════╝╚═╝  ╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
     ${PLAIN}"
     echo -e "快捷键已设置为 ${YELLOW}ech${PLAIN} , 下次运行输入 ${YELLOW}ech${PLAIN} 即可"
     echo -e "当前版本: ${GREEN}${SCRIPT_VER}${PLAIN}  状态: ${UPDATE_TIP}"
